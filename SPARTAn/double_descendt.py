@@ -20,7 +20,7 @@ if 'X' in mat_data:
     print(df_data)
 else:
     raise ValueError("La variabile 'X' non è presente nel file .mat")
-df_data=df_data.iloc[:,:30]
+df_data=df_data.iloc[:,:15]
 # Usiamo tutte le righe disponibili e impostiamo il target come il valore della prima feature al passo successivo
 df = df_data.copy()
 df["target"] = df.iloc[:, 0].shift(-1)
@@ -142,7 +142,8 @@ def train_spartan_nonlinear(model, X_train, Y_train, X_test, Y_test,
 # ====================================================
 # In questa parte variare K (da 1 a 20) per studiare come varia il numero di parametri:
 #      P = D + 2*K*D
-K_values = [1,2,5,8,10,50,200,300,400,800,1000]
+K_values = np.unique(np.logspace(0, np.log10(300), num=35, dtype=int))
+K_values = list(K_values)
 
 train_loss_list = []
 test_loss_list = []
@@ -150,8 +151,10 @@ param_count_list = []
 
 eps_w = 0.001
 eps_beta = 1.0
-num_epochs = 20000
-lr = 0.01
+num_epochs = 30000
+lr = 0.005
+
+D = X_train.shape[1]  # assumendo che X_train abbia la dimensione [num_samples, D]
 
 for K in K_values:
     model = NonlinearSPARTAnRegressor(input_dim=D, K=K)
@@ -167,24 +170,29 @@ for K in K_values:
     
     print(f"K = {K:2d} | Parametri totali = {param_count:4d} | Train Loss = {final_train_loss:.4f} | Test Loss = {final_test_loss:.4f}")
 
+# -------------------------------------------------------
+# Plot della double descent con asse x in scala logaritmica
+# -------------------------------------------------------
 plt.figure(figsize=(10,6))
 plt.plot(param_count_list, train_loss_list, label="Train Loss", marker="o")
 plt.plot(param_count_list, test_loss_list, label="Test Loss", marker="o")
 plt.xlabel("Numero totale di parametri (P = D + 2*K*D)")
 plt.ylabel("Loss (MSE + penalità)")
 plt.title("Double Descent nel modello SPARTAn non lineare al variare di K")
+plt.xscale('log')  # Imposta l'asse x in scala logaritmica
 plt.legend()
 plt.grid(True)
+plt.savefig("double_descent_plot.png", dpi=300)  # Salva il plot come PNG
 plt.show()
 
 # ====================================================
 # 5. Visualizzazione del Forecasting sul Test set
 # ====================================================
-# Per visualizzare il forecasting scegliamo un valore di K (ad es. K = 10)
-K_forecast = 2
+# Scegliamo un valore di K elevato, ad es. K = 800
+K_forecast = 800
 model_forecast = NonlinearSPARTAnRegressor(input_dim=D, K=K_forecast)
 
-# Addestriamo il modello per il forecasting
+# Addestramento del modello per il forecasting
 train_losses_forecast, test_losses_forecast = train_spartan_nonlinear(model_forecast, X_train, Y_train, X_test, Y_test,
                                                                        eps_w=eps_w, eps_beta=eps_beta,
                                                                        num_epochs=num_epochs, lr=lr)
@@ -207,4 +215,5 @@ plt.ylabel("Valore del Target")
 plt.title("Forecasting sul Test set (K = {})".format(K_forecast))
 plt.legend()
 plt.grid(True)
+plt.savefig("forecasting_plot.png", dpi=300)  # Salva il plot come PNG
 plt.show()

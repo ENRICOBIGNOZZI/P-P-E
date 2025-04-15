@@ -43,7 +43,31 @@ df=df_data
 print(df.columns)
 df["target"] = df.iloc[:,0].shift(-1)
 df = df.dropna()
+plt.figure(figsize=(12,6))
+for col in df.columns:
+    plt.plot(df[col], label=col)
 
+plt.xlabel("Indice")
+plt.ylabel("Valore")
+plt.title("Serie Temporali - Tutte le Colonne")
+plt.legend()
+plt.grid(True)
+
+# Salva il grafico in formato PNG
+plt.savefig("all_time_series_real.png")
+plt.show()
+
+plt.figure(figsize=(12,6))
+plt.plot(df["target"], label="Target", linestyle="--")
+plt.xlabel("Indice")
+plt.ylabel("Valore")
+plt.title("Serie Temporale: Signal e Target")
+plt.legend()
+plt.grid(True)
+
+# Salva il plot in una immagine PNG
+plt.savefig("target_series_plot_real.png")
+plt.show()
 #X_np = df.drop(columns=["signal"]).values.astype(np.float32)
 Y_np = df["target"].values.reshape(-1, 1).astype(np.float32)
 
@@ -100,7 +124,7 @@ Lambda, gamma_prob, w_prob, C = spartan_regression_fast(
     epsilon_d=0.001,
     epsilon_r=1,
     epsilon_l2=0.,
-    epochs=1000,
+    epochs=10000,
     lr=1e-2,
     verbose=True
 )
@@ -114,7 +138,7 @@ Lambda, gamma_prob, w_prob, C = spartan_regression_fast_time(
     epsilon_d=0.001,
     epsilon_r=1,
     epsilon_l2=0.00,
-    epochs=1000,
+    epochs=10000,
     lr=1e-2,
     verbose=True
 )
@@ -127,7 +151,7 @@ Y_test_np = Y_test.detach().numpy().flatten()
 # 5. LSTM Model
 # ======================
 # Funzione per creare sequenze dai dati (con finestra mobile)
-window_size = 5
+window_size = 10
 def create_sequences(X, Y, window_size):
     Xs = []
     Ys = []
@@ -163,14 +187,14 @@ class LSTMModel(nn.Module):
         return out
 
 input_size = X_np.shape[1]  # Numero di feature per ogni timestep
-hidden_size = 128
+hidden_size = 64
 num_layers = 1
 output_size = 1
 
 lstm_model = LSTMModel(input_size, hidden_size, num_layers, output_size)
 criterion = nn.MSELoss()
 optimizer_lstm = optim.Adam(lstm_model.parameters(), lr=1e-2)
-epochs_lstm = 100
+epochs_lstm = 1000
 
 # Ciclo di training per LSTM
 for epoch in range(epochs_lstm):
@@ -221,16 +245,18 @@ for name, pred in preds.items():
     if name == "LSTM":
         plt.plot(pred, label=name)
     else:
-        plt.plot(pred, label=name)
+        plt.plot(pred[-len(Y_test_seq):], label=name)
 plt.legend()
-plt.title("Forecast Comparison with LSTM")
+plt.title("Forecast Comparison Real Data")
 plt.grid(True)
+plt.savefig("forecast_comparison_real_data.png", dpi=300)  # Salva l'immagine in PNG
 plt.show()
 
 plt.figure(figsize=(10,6))
 for name, pred in preds.items():
-    plt.hist(pred - Y_true_seq, bins=50, alpha=0.5, label=name)
+    plt.hist(pred[-len(Y_test_seq):] - Y_true_seq, bins=50, alpha=0.5, label=name)
 plt.legend()
-plt.title("Error Histogram with LSTM")
+plt.title("Error Histogram Real Data")
 plt.grid(True)
+plt.savefig("Error_Histogram_real_data.png", dpi=300)  # Salva l'immagine in PNG
 plt.show()

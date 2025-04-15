@@ -14,10 +14,10 @@ def spartan_regression_fast_time(
     T2, M = Y.shape
     assert T == T2, f"Mismatch T in X({T}) vs Y({T2})"
 
-    Lambda = nn.Parameter(torch.randn(K, D, M)*0.01)
-    C      = nn.Parameter(torch.randn(K, D)*0.01)
+    Lambda = nn.Parameter(torch.randn(K, D, M))
+    C      = nn.Parameter(torch.randn(K, D))
     w_0    = nn.Parameter(torch.zeros(T, D))  # ora dipende dal tempo
-    gamma_0= nn.Parameter(torch.randn(T, K)*0.01)
+    gamma_0= nn.Parameter(torch.randn(T, K))
 
     optimizer = optim.Adam([Lambda, C, w_0, gamma_0], lr=lr)
 

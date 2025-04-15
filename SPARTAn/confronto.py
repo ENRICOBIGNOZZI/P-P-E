@@ -16,7 +16,33 @@ from stationary_SPARTAn import spartan_regression_fast, forecast_y
 df = pd.read_csv("sinusoidal_features.csv")[:10000]
 df["target"] = df["signal"].shift(-1)
 df = df.dropna()
+df=df.drop(['time_squared'],axis=1)
+print(df.columns)
+'''plt.figure(figsize=(12,6))
+for col in df.columns:
+    plt.plot(df[col], label=col)
 
+plt.xlabel("Indice")
+plt.ylabel("Valore")
+plt.title("Serie Temporali - Tutte le Colonne")
+plt.legend()
+plt.grid(True)
+
+# Salva il grafico in formato PNG
+plt.savefig("all_time_series.png")
+plt.show()
+
+plt.figure(figsize=(12,6))
+plt.plot(df["target"], label="Target", linestyle="--")
+plt.xlabel("Indice")
+plt.ylabel("Valore")
+plt.title("Serie Temporale: Signal e Target")
+plt.legend()
+plt.grid(True)
+
+# Salva il plot in una immagine PNG
+plt.savefig("target_series_plot.png")
+plt.show()'''
 X_np = df.drop(columns=["signal"]).values.astype(np.float32)
 Y_np = df["target"].values.reshape(-1, 1).astype(np.float32)
 
@@ -39,8 +65,8 @@ Y_train, Y_test = Y[:n_train], Y[n_train:]
 # ======================
 # 2. Kernel Ridge Regression Full (KRR Full)
 # ======================
-lambda_ = 1e-2
-gamma = 0.00001
+lambda_ = 1e-3
+gamma = 0.000001
 K_train = rbf_kernel(X_train, X_train, gamma=gamma)
 
 n_tr = X_train.shape[0]
@@ -61,63 +87,8 @@ print("KRR Full Test MSE:", mse_test.item())
 # 3. KRR rank-1 (KRR Deep)
 # ======================
 # Implementazione basata su rete neurale per apprendere un kernel
-class KernelNet(nn.Module):
-    def __init__(self, input_dim, output_dim=64):
-        super(KernelNet, self).__init__()
-        self.feature_map = nn.Sequential(
-            nn.Linear(input_dim, 32),
-            nn.ReLU(),
-            nn.Linear(32, output_dim)
-        )
-
-    def forward(self, x):
-        return self.feature_map(x)
-
-def compute_kernel(phi_X1, phi_X2):
-    # Costruisce un kernel simmetrico positivo (dot product)
-    return phi_X1 @ phi_X2.T
-
-input_dim = X.shape[1]
-kernel_net = KernelNet(input_dim)
-optimizer = optim.Adam(kernel_net.parameters(), lr=1e-2)
-lambda_ = 1e-2
-epochs = 80
-
-for epoch in range(epochs):
-    kernel_net.train()
-    optimizer.zero_grad()
-
-    phi_train = kernel_net(X_train)
-    K_train = compute_kernel(phi_train, phi_train)
-    K_train_reg = K_train + lambda_ * torch.eye(K_train.shape[0])
-
-    alpha = torch.linalg.solve(K_train_reg, Y_train)
-    Y_train_pred = K_train @ alpha
-
-    loss = torch.mean((Y_train_pred - Y_train) ** 2)
-    loss.backward()
-    optimizer.step()
-
-    if epoch % 20 == 0 or epoch == epochs - 1:
-        print(f"KRR Deep - Epoch {epoch}: Train MSE = {loss.item():.6f}")
-
-kernel_net.eval()
-with torch.no_grad():
-    phi_train = kernel_net(X_train)
-    phi_test = kernel_net(X_test)
-
-    K_train = compute_kernel(phi_train, phi_train)
-    K_train_reg = K_train + lambda_ * torch.eye(K_train.shape[0])
-    alpha = torch.linalg.solve(K_train_reg, Y_train)
-
-    K_test_train = compute_kernel(phi_test, phi_train)
-    Y_test_pred_deep = K_test_train @ alpha
-
-    mse_test_deep = torch.mean((Y_test_pred_deep - Y_test)**2)
-    print("KRR Deep Test MSE:", mse_test_deep.item())
-
 Y_pred_krr_rank1 = Y_test_pred 
-Y_pred_krr_rank2 = Y_test_pred_deep
+
 
 # ======================
 # 4. SPARTAn standard e SPARTAn Time
@@ -125,11 +96,11 @@ Y_pred_krr_rank2 = Y_test_pred_deep
 Lambda, gamma_prob, w_prob, C = spartan_regression_fast(
     X_train,
     Y_train,
-    K=1,
-    epsilon_d=0.000001,
+    K=3,
+    epsilon_d=0.001,
     epsilon_r=1,
     epsilon_l2=0.,
-    epochs=4000,
+    epochs=10000,
     lr=1e-2,
     verbose=True
 )
@@ -139,11 +110,11 @@ Y_pred_spartan = Y_hat_torch.detach().numpy().reshape(-1)
 Lambda, gamma_prob, w_prob, C = spartan_regression_fast_time(
     X_train,
     Y_train,
-    K=1,
-    epsilon_d=0.0000001,
-    epsilon_r=2,
+    K=3,
+    epsilon_d=0.001,
+    epsilon_r=1,
     epsilon_l2=0.00,
-    epochs=4000,
+    epochs=10000,
     lr=1e-2,
     verbose=True
 )
@@ -156,7 +127,7 @@ Y_test_np = Y_test.detach().numpy().flatten()
 # 5. LSTM Model
 # ======================
 # Funzione per creare sequenze dai dati (con finestra mobile)
-window_size = 5
+window_size = 10
 def create_sequences(X, Y, window_size):
     Xs = []
     Ys = []
@@ -192,14 +163,14 @@ class LSTMModel(nn.Module):
         return out
 
 input_size = X_np.shape[1]  # Numero di feature per ogni timestep
-hidden_size = 128
+hidden_size = 64
 num_layers = 1
 output_size = 1
 
 lstm_model = LSTMModel(input_size, hidden_size, num_layers, output_size)
 criterion = nn.MSELoss()
 optimizer_lstm = optim.Adam(lstm_model.parameters(), lr=1e-2)
-epochs_lstm = 100
+epochs_lstm = 1000
 
 # Ciclo di training per LSTM
 for epoch in range(epochs_lstm):
@@ -212,7 +183,6 @@ for epoch in range(epochs_lstm):
     if epoch % 20 == 0 or epoch == epochs_lstm - 1:
         print(f"LSTM Epoch {epoch}: Train Loss = {loss.item():.6f}")
 
-# Inference sul test set per LSTM
 lstm_model.eval()
 with torch.no_grad():
     Y_pred_lstm = lstm_model(X_test_seq)
@@ -222,7 +192,6 @@ with torch.no_grad():
 Y_pred_lstm_np = Y_pred_lstm.detach().numpy().flatten()
 print(Y_pred_lstm_np)
 print(Y_pred_lstm_np.shape)
-# Poiché con le sequenze perdiamo window_size campioni, definiamo Y_true_seq come ultimo segmento di Y_test_np
 Y_true_seq = Y_test_np[-len(Y_test_seq):]
 
 # ======================
@@ -230,9 +199,9 @@ Y_true_seq = Y_test_np[-len(Y_test_seq):]
 # ======================
 preds = {
     "KRR Full": Y_pred_krr_rank1.detach().numpy().flatten(),
-    "KRR Deep": Y_pred_krr_rank2.detach().numpy().flatten(),
+    #"KRR Deep": Y_pred_krr_rank2.detach().numpy().flatten(),
     "SPARTAn": Y_pred_spartan.flatten(),
-    "SPARTAn Time": Y_pred_spartan_time.flatten(),
+    #"SPARTAn Time": Y_pred_spartan_time.flatten(),
     "LSTM": Y_pred_lstm_np
 }
 
@@ -244,23 +213,64 @@ for name, pred in preds.items():
         mse = mean_squared_error(Y_test_np, pred[:len(Y_test_np)])
     print(f"{name} MSE (completo o adattato): {mse:.6f}")
 
-plt.figure(figsize=(15,6))
-plt.plot(Y_true_seq, label="True", linewidth=2)
+# Calcolo degli MSE per ogni modello
+mse_values = {}
 for name, pred in preds.items():
-    # Per il confronto, allineiamo le predizioni LSTM con Y_true_seq.
-    if name == "LSTM":
-        plt.plot(pred, label=name)
+    print(name)
+    if name == 'LSTM':
+        mse = mean_squared_error(Y_test_np[-len(pred):], pred)
     else:
-        plt.plot(pred, label=name)
-plt.legend()
-plt.title("Forecast Comparison with LSTM")
-plt.grid(True)
+        mse = mean_squared_error(Y_test_np, pred[:len(Y_test_np)])
+    mse_values[name] = mse
+    print(f"{name} MSE (completo o adattato): {mse:.6f}")
+
+# Creazione di un DataFrame con i risultati
+df_mse = pd.DataFrame(list(mse_values.items()), columns=['Model', 'MSE'])
+df_mse['MSE'] = df_mse['MSE'].apply(lambda x: f"{x:.6f}")
+
+# Creazione della tabella usando matplotlib
+fig, ax = plt.subplots(figsize=(6, 2))
+ax.axis('tight')
+ax.axis('off')
+table = ax.table(cellText=df_mse.values,
+                 colLabels=df_mse.columns,
+                 cellLoc='center',
+                 loc='center')
+
+plt.title("MSE Table")
+plt.savefig("mse_table.png")  # Salva la tabella in formato PNG
 plt.show()
+window_size = 5  # Dimensione della finestra usata per generare le sequenze
+
+# Creiamo un asse x per la serie di target "True" e per le previsioni degli altri modelli.
+x_true = np.arange(len(Y_true_seq))
+
+plt.figure(figsize=(15,6))
+plt.plot(x_true, Y_true_seq, label="True", linewidth=2)
+
+for name, pred in preds.items():
+    if name == "LSTM":
+        # Per LSTM, creiamo un asse x che tenga conto dello shift (window_size)
+        x_lstm = np.arange(window_size, window_size + len(pred))
+        plt.plot(x_lstm, pred, label=name)
+    else:
+        # Gli altri modelli sono allineati con x_true
+        plt.plot( pred[-len(Y_test_seq):], label=name)
+
+plt.legend()
+plt.title("Forecast Comparison")
+plt.xlabel("Indice Temporale")
+plt.ylabel("Valore")
+plt.grid(True)
+plt.savefig("forecast_comparison.png")  # Salva il grafico in PNG
+plt.show()
+
 
 plt.figure(figsize=(10,6))
 for name, pred in preds.items():
-    plt.hist(pred - Y_true_seq, bins=50, alpha=0.5, label=name)
+    plt.hist(pred[-len(Y_test_seq):] - Y_true_seq, bins=50, alpha=0.5, label=name)
 plt.legend()
-plt.title("Error Histogram with LSTM")
+plt.title("Error Histogram")
 plt.grid(True)
+plt.savefig("error_histogram.png")  # Salva il grafico in PNG
 plt.show()

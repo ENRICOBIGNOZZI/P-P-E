@@ -179,6 +179,7 @@ def main():
     plt.xlabel("Test sample index")
     plt.ylabel("Output value")
     plt.show()
+    
 
     # 5) Then alpha_rank1 is your partial solution. For any x,
     #    prediction ~ sum_i alpha_rank1[i]*K(x, x_i).
@@ -198,6 +199,34 @@ def main():
         grad_importance[d] = pd.abs().mean()
 
     print("Gradient-based importance:", grad_importance)
-   
+    
+
+    # Calcolo degli autovalori e autovettori
+    eigenvals, eigenvecs = torch.linalg.eigh(K_train)
+    idx_desc = torch.argsort(eigenvals, descending=True)
+    evals_desc = eigenvals[idx_desc]
+    evecs_desc = eigenvecs[:, idx_desc]
+
+    # Plot degli autovalori
+    plt.figure()
+    plt.plot(evals_desc.detach().cpu().numpy())
+    plt.title("Autovalori in ordine decrescente")
+    plt.xlabel("Indice")
+    plt.ylabel("Autovalore")
+    plt.savefig("autovalori.png")  # Salva il grafico come PNG
+    plt.close()
+
+    # Plot dei primi 5 autovettori
+    num_evecs_to_plot = 5  # Numero di autovettori da plottare
+    plt.figure()
+    for i in range(num_evecs_to_plot):
+        plt.plot(evecs_desc[:, i].detach().cpu().numpy(), label=f"Autovettore {i+1}")
+
+    plt.legend()
+    plt.title("Primi 5 autovettori")
+    plt.xlabel("Indice del campione di training")
+    plt.ylabel("Valore")
+    plt.savefig("autovettori.png")  # Salva il grafico come PNG
+    plt.close()
 if __name__ == "__main__":
     main()
